@@ -1,21 +1,25 @@
 package be.decock.steven.decisions.model;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static be.decock.steven.decisions.model.Outcome.OutcomeBuilder.outcome;
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY;
 
 public class DecisionTable {
 
     public static final String FILENAME = System.getProperty("user.home") + "\\decisionTable.json";
+    private static final Pattern YES_NO_PATTERN = Pattern.compile("[yYnNjJ]");
     private List<Rule> rules = new ArrayList<>();
     private String name;
-    private Map<Answer, SubTableOrOutcome> mainTable = new HashMap<>();
+    private Map<String, SubTableOrOutcome> mainTable = new HashMap<>();
 
     private Stack<Answer> workingListOfanswers = new Stack<>();
     private Scanner scanner = new Scanner(System.in);
@@ -41,13 +45,13 @@ public class DecisionTable {
 
     public void askQuestions() {
 
-        Map<Answer, SubTableOrOutcome> subTable = mainTable;
+        Map<String, SubTableOrOutcome> subTable = mainTable;
 
         walkSubTable(subTable, 0);
 
     }
 
-    private void walkSubTable(Map<Answer, SubTableOrOutcome> subTable, int level) {
+    private void walkSubTable(Map<String, SubTableOrOutcome> subTable, int level) {
         boolean onFinalRuleLevel = level == rules.size()-1;
         getAnswersForRuleNumber(level)
                 .forEach(answer -> {
@@ -59,15 +63,15 @@ public class DecisionTable {
                         boolean outcomeClear = onFinalRuleLevel || askYesOrNo("Is the outcome clear in this situation?");
                         if (outcomeClear) {
                             String outcome = askForInput("What is the outcome?");
-                            subTable.put(answer, new SubTableOrOutcome(outcome(outcome).build()));
+                            subTable.put(answer.getName(), new SubTableOrOutcome(outcome(outcome).build()));
                             save();
                         } else {
-                            subTable.put(answer, new SubTableOrOutcome(new HashMap<>()));
+                            subTable.put(answer.getName(), new SubTableOrOutcome(new HashMap<>()));
                         }
                     }
-                    if (!subTable.get(answer).hasOutCome()) {
+                    if (!subTable.get(answer.getName()).hasOutCome()) {
                         workingListOfanswers.push(answer);
-                        walkSubTable(subTable.get(answer).getSubTable().get(), level + 1);
+                        walkSubTable(subTable.get(answer.getName()).getSubTable().get(), level + 1);
                     }
                 });
         workingListOfanswers.pop();
@@ -76,6 +80,7 @@ public class DecisionTable {
     private void save() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new Jdk8Module());
+        mapper.setSerializationInclusion(NON_EMPTY);
         try {
             mapper.writeValue(new File(FILENAME), mainTable);
         } catch (IOException e) {
@@ -103,7 +108,7 @@ public class DecisionTable {
         String response = null;
         do {
             System.out.println(String.format("%s (Y/N)", question));
-            response = scanner.next().toLowerCase();
+            response = scanner.next(YES_NO_PATTERN).toLowerCase();
         } while (response == null || !(response.equals("y") || response.equals("n")));
         switch (response) {
             case "y": return true;
@@ -124,13 +129,13 @@ public class DecisionTable {
     private static class SubTableOrOutcome {
 
         private Optional<Outcome> outcome = Optional.empty();
-        private Optional<Map<Answer, SubTableOrOutcome>> subTable = Optional.empty();
+        private Optional<Map<String, SubTableOrOutcome>> subTable = Optional.empty();
 
         private SubTableOrOutcome(Outcome outcome) {
             this.outcome = Optional.of(outcome);
         }
 
-        private SubTableOrOutcome(Map<Answer, SubTableOrOutcome> subTable) {
+        private SubTableOrOutcome(Map<String, SubTableOrOutcome> subTable) {
             this.subTable = Optional.of(subTable);
         }
 
@@ -142,7 +147,7 @@ public class DecisionTable {
             return outcome;
         }
 
-        public Optional<Map<Answer, SubTableOrOutcome>> getSubTable() {
+        public Optional<Map<String, SubTableOrOutcome>> getSubTable() {
             return subTable;
         }
     }

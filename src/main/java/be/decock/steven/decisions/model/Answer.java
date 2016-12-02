@@ -62,4 +62,9 @@ public class Answer {
                 .append(name)
                 .toHashCode();
     }
+
+    @Override
+    public String toString() {
+        return name;
+    }
 }
